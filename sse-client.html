@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSE Client</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .connection-panel {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+      }
+      .url-input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        resize: vertical;
+      }
+      .button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        margin: 5px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .button:hover {
+        background: #0056b3;
+      }
+      .button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
+      .disconnect {
+        background: #dc3545;
+      }
+      .disconnect:hover {
+        background: #c82333;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .status.connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .status.connecting {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+      }
+      #event-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        background: white;
+      }
+      #event-list li {
+        margin: 5px 0;
+        padding: 10px;
+        background: #f8f9fa;
+        border-left: 3px solid #007bff;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+      }
+      .event-header {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #495057;
+        font-family: Arial, sans-serif;
+      }
+      .json-container {
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        padding: 10px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .json-key {
+        color: #d73a49;
+        font-weight: bold;
+      }
+      .json-string {
+        color: #032f62;
+      }
+      .json-number {
+        color: #005cc5;
+      }
+      .json-boolean {
+        color: #e36209;
+      }
+      .json-null {
+        color: #6f42c1;
+      }
+      .system-message {
+        background: #e2e3e5;
+        color: #383d41;
+        font-style: italic;
+        padding: 8px;
+        border-radius: 4px;
+        font-family: Arial, sans-serif;
+      }
+      .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        border-left-color: #dc3545;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Server-Sent Events (SSE) Client</h1>
+
+    <div class="connection-panel">
+      <h3>Connection Settings</h3>
+      <label for="sse-url">SSE URL:</label>
+      <input
+        type="text"
+        id="sse-url"
+        class="url-input"
+        value="http://localhost:3000/sse/client-manuals/2024/onboarding"
+        placeholder="Enter SSE endpoint URL"
+      />
+      <div>
+        <button id="connect-btn" class="button">Connect</button>
+        <button id="disconnect-btn" class="button disconnect" disabled>Disconnect</button>
+        <button id="clear-btn" class="button">Clear Events</button>
+      </div>
+      <div id="status" class="status disconnected">Disconnected</div>
+    </div>
+
+    <div class="connection-panel">
+      <h3>Trigger Events</h3>
+      <label for="trigger-url">Trigger API URL:</label>
+      <input
+        type="text"
+        id="trigger-url"
+        class="url-input"
+        placeholder="Enter API endpoint to trigger events (e.g., http://localhost:3000/sse/test/2024)"
+      />
+      <label for="trigger-payload">Request Payload (JSON, optional):</label>
+      <textarea id="trigger-payload" class="url-input" rows="3" placeholder='{"key": "value"}'></textarea>
+      <div>
+        <button id="trigger-btn" class="button">Send Trigger Request</button>
+      </div>
+      <div id="trigger-status" class="status disconnected" style="display: none">Ready to trigger</div>
+    </div>
+
+    <div id="events">
+      <h2>Events:</h2>
+      <ul id="event-list"></ul>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const eventList = document.getElementById('event-list')
+        const urlInput = document.getElementById('sse-url')
+        const connectBtn = document.getElementById('connect-btn')
+        const disconnectBtn = document.getElementById('disconnect-btn')
+        const clearBtn = document.getElementById('clear-btn')
+        const status = document.getElementById('status')
+        const triggerUrlInput = document.getElementById('trigger-url')
+        const triggerPayloadInput = document.getElementById('trigger-payload')
+        const triggerBtn = document.getElementById('trigger-btn')
+        const triggerStatus = document.getElementById('trigger-status')
+
+        let eventSource = null
+
+        function updateStatus(state, message) {
+          status.className = `status ${state}`
+          status.textContent = message
+        }
+
+        function syntaxHighlight(json) {
+          if (typeof json !== 'string') {
+            json = JSON.stringify(json, null, 2)
+          }
+          json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          return json.replace(
+            /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+            function (match) {
+              let cls = 'json-number'
+              if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                  cls = 'json-key'
+                } else {
+                  cls = 'json-string'
+                }
+              } else if (/true|false/.test(match)) {
+                cls = 'json-boolean'
+              } else if (/null/.test(match)) {
+                cls = 'json-null'
+              }
+              return '<span class="' + cls + '">' + match + '</span>'
+            }
+          )
+        }
+
+        function addEvent(data, type = 'message') {
+          const li = document.createElement('li')
+          const timestamp = new Date().toLocaleTimeString()
+
+          if (type === 'system' || type === 'error') {
+            li.className = type === 'error' ? 'error-message' : ''
+            li.innerHTML = `
+              <div class="event-header">[${timestamp}] ${type.toUpperCase()}</div>
+              <div class="system-message">${data}</div>
+            `
+          } else {
+            let formattedData
+            let isJson = false
+
+            try {
+              // If data is already an object, use it directly
+              const jsonData = typeof data === 'string' ? JSON.parse(data) : data
+              formattedData = syntaxHighlight(jsonData)
+              isJson = true
+            } catch (e) {
+              // If not valid JSON, display as plain text
+              formattedData = typeof data === 'string' ? data : JSON.stringify(data)
+            }
+
+            li.innerHTML = `
+              <div class="event-header">[${timestamp}] ${type.toUpperCase()}${isJson ? ' (JSON)' : ' (TEXT)'}</div>
+              <div class="json-container">${formattedData}</div>
+            `
+          }
+
+          eventList.appendChild(li)
+          eventList.scrollTop = eventList.scrollHeight
+        }
+
+        function connect() {
+          const url = urlInput.value.trim()
+          if (!url) {
+            alert('Please enter a valid URL')
+            return
+          }
+
+          if (eventSource) {
+            eventSource.close()
+          }
+
+          updateStatus('connecting', 'Connecting...')
+          connectBtn.disabled = true
+          disconnectBtn.disabled = false
+
+          try {
+            eventSource = new EventSource(url)
+
+            eventSource.onopen = function () {
+              updateStatus('connected', `Connected to: ${url}`)
+              addEvent('Connection established', 'system')
+            }
+
+            eventSource.onmessage = function (event) {
+              try {
+                const data = JSON.parse(event.data)
+                addEvent(data, 'message')
+              } catch (e) {
+                addEvent(event.data, 'raw')
+              }
+            }
+
+            eventSource.onerror = function (error) {
+              console.error('EventSource error:', error)
+              if (eventSource.readyState === EventSource.CLOSED) {
+                updateStatus('disconnected', 'Connection closed')
+                connectBtn.disabled = false
+                disconnectBtn.disabled = true
+                addEvent('Connection closed', 'error')
+              } else {
+                addEvent('Connection error occurred', 'error')
+              }
+            }
+          } catch (error) {
+            updateStatus('disconnected', 'Failed to connect')
+            connectBtn.disabled = false
+            disconnectBtn.disabled = true
+            addEvent(`Connection failed: ${error.message}`, 'error')
+          }
+        }
+
+        function disconnect() {
+          if (eventSource) {
+            eventSource.close()
+            eventSource = null
+          }
+          updateStatus('disconnected', 'Disconnected')
+          connectBtn.disabled = false
+          disconnectBtn.disabled = true
+          addEvent('Manually disconnected', 'system')
+        }
+
+        function clearEvents() {
+          eventList.innerHTML = ''
+        }
+
+        function updateTriggerStatus(state, message) {
+          triggerStatus.style.display = 'block'
+          triggerStatus.className = `status ${state}`
+          triggerStatus.textContent = message
+
+          // Hide status after 3 seconds for success/error states
+          if (state !== 'connecting') {
+            setTimeout(() => {
+              triggerStatus.style.display = 'none'
+            }, 3000)
+          }
+        }
+
+        async function triggerEvent() {
+          const url = triggerUrlInput.value.trim()
+          if (!url) {
+            alert('Please enter a trigger URL')
+            return
+          }
+
+          let payload = null
+          const payloadText = triggerPayloadInput.value.trim()
+
+          if (payloadText) {
+            try {
+              payload = JSON.parse(payloadText)
+            } catch (e) {
+              alert('Invalid JSON payload: ' + e.message)
+              return
+            }
+          }
+
+          updateTriggerStatus('connecting', 'Sending trigger request...')
+          triggerBtn.disabled = true
+
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: payload ? JSON.stringify(payload) : null,
+            })
+
+            if (response.ok) {
+              const responseText = await response.text()
+              updateTriggerStatus('connected', `✓ Trigger sent successfully (${response.status})`)
+              addEvent(`Trigger API called successfully: ${responseText || 'No response body'}`, 'system')
+            } else {
+              const errorText = await response.text()
+              updateTriggerStatus('disconnected', `✗ Trigger failed (${response.status})`)
+              addEvent(`Trigger API failed: ${response.status} - ${errorText}`, 'error')
+            }
+          } catch (error) {
+            updateTriggerStatus('disconnected', `✗ Request failed: ${error.message}`)
+            addEvent(`Trigger request error: ${error.message}`, 'error')
+          } finally {
+            triggerBtn.disabled = false
+          }
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', connect)
+        disconnectBtn.addEventListener('click', disconnect)
+        clearBtn.addEventListener('click', clearEvents)
+        triggerBtn.addEventListener('click', triggerEvent)
+
+        // Allow Enter key to connect/trigger
+        urlInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && !connectBtn.disabled) {
+            connect()
+          }
+        })
+
+        triggerUrlInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && !triggerBtn.disabled) {
+            triggerEvent()
+          }
+        })
+      })
+    </script>
+  </body>
+</html>
