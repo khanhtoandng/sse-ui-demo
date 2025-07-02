@@ -7,9 +7,25 @@
     <style>
       body {
         font-family: Arial, sans-serif;
-        max-width: 800px;
+        max-width: 1200px;
         margin: 0 auto;
         padding: 20px;
+      }
+      .main-container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 100px);
+      }
+      .left-panel {
+        flex: 0 0 400px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .right-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
       }
       .connection-panel {
         background: #f5f5f5;
@@ -69,12 +85,19 @@
         color: #856404;
         border: 1px solid #ffeaa7;
       }
+      #events {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
       #event-list {
-        max-height: 400px;
+        flex: 1;
+        max-height: none;
         overflow-y: auto;
         border: 1px solid #ddd;
         padding: 10px;
         background: white;
+        margin: 0;
       }
       #event-list li {
         margin: 5px 0;
@@ -136,44 +159,50 @@
   <body>
     <h1>Server-Sent Events (SSE) Client</h1>
 
-    <div class="connection-panel">
-      <h3>Connection Settings</h3>
-      <label for="sse-url">SSE URL:</label>
-      <input
-        type="text"
-        id="sse-url"
-        class="url-input"
-        value="http://localhost:3000/sse/client-manuals/2024/onboarding"
-        placeholder="Enter SSE endpoint URL"
-      />
-      <div>
-        <button id="connect-btn" class="button">Connect</button>
-        <button id="disconnect-btn" class="button disconnect" disabled>Disconnect</button>
-        <button id="clear-btn" class="button">Clear Events</button>
-      </div>
-      <div id="status" class="status disconnected">Disconnected</div>
-    </div>
+    <div class="main-container">
+      <div class="left-panel">
+        <div class="connection-panel">
+          <h3>Connection Settings</h3>
+          <label for="sse-url">SSE URL:</label>
+          <input
+            type="text"
+            id="sse-url"
+            class="url-input"
+            value="http://localhost:3000/sse/client-manuals/2024/onboarding"
+            placeholder="Enter SSE endpoint URL"
+          />
+          <div>
+            <button id="connect-btn" class="button">Connect</button>
+            <button id="disconnect-btn" class="button disconnect" disabled>Disconnect</button>
+            <button id="clear-btn" class="button">Clear Events</button>
+          </div>
+          <div id="status" class="status disconnected">Disconnected</div>
+        </div>
 
-    <div class="connection-panel">
-      <h3>Trigger Events</h3>
-      <label for="trigger-url">Trigger API URL:</label>
-      <input
-        type="text"
-        id="trigger-url"
-        class="url-input"
-        placeholder="Enter API endpoint to trigger events (e.g., http://localhost:3000/sse/test/2024)"
-      />
-      <label for="trigger-payload">Request Payload (JSON, optional):</label>
-      <textarea id="trigger-payload" class="url-input" rows="3" placeholder='{"key": "value"}'></textarea>
-      <div>
-        <button id="trigger-btn" class="button">Send Trigger Request</button>
+        <div class="connection-panel">
+          <h3>Trigger Events</h3>
+          <label for="trigger-url">Trigger API URL:</label>
+          <input
+            type="text"
+            id="trigger-url"
+            class="url-input"
+            placeholder="Enter API endpoint to trigger events (e.g., http://localhost:3000/sse/test/2024)"
+          />
+          <label for="trigger-payload">Request Payload (JSON, optional):</label>
+          <textarea id="trigger-payload" class="url-input" rows="3" placeholder='{"key": "value"}'></textarea>
+          <div>
+            <button id="trigger-btn" class="button">Send Trigger Request</button>
+          </div>
+          <div id="trigger-status" class="status disconnected" style="display: none">Ready to trigger</div>
+        </div>
       </div>
-      <div id="trigger-status" class="status disconnected" style="display: none">Ready to trigger</div>
-    </div>
 
-    <div id="events">
-      <h2>Events:</h2>
-      <ul id="event-list"></ul>
+      <div class="right-panel">
+        <div id="events">
+          <h2>Events:</h2>
+          <ul id="event-list"></ul>
+        </div>
+      </div>
     </div>
 
     <script>
