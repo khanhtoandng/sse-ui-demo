@@ -118,6 +118,18 @@
         color: #495057;
         font-family: Arial, sans-serif;
       }
+      .event-header.system {
+        color: #28a745;
+      }
+      .event-header.message {
+        color: #007bff;
+      }
+      .event-header.error {
+        color: #dc3545;
+      }
+      .event-header.raw {
+        color: #6c757d;
+      }
       .json-container {
         background: #ffffff;
         border: 1px solid #e9ecef;
@@ -262,7 +274,7 @@
           if (type === 'system' || type === 'error') {
             li.className = type === 'error' ? 'error-message' : ''
             li.innerHTML = `
-              <div class="event-header">[${timestamp}] ${type.toUpperCase()}</div>
+              <div class="event-header ${type}">[${timestamp}] ${type.toUpperCase()}</div>
               <div class="system-message">${data}</div>
             `
           } else {
@@ -280,7 +292,9 @@
             }
 
             li.innerHTML = `
-              <div class="event-header">[${timestamp}] ${type.toUpperCase()}${isJson ? ' (JSON)' : ' (TEXT)'}</div>
+              <div class="event-header ${type}">[${timestamp}] ${type.toUpperCase()}${
+              isJson ? ' (JSON)' : ' (TEXT)'
+            }</div>
               <div class="json-container">${formattedData}</div>
             `
           }
