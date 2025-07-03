@@ -330,6 +330,12 @@
               try {
                 const data = JSON.parse(event.data)
                 addEvent(data, 'message')
+
+                // Auto-disconnect when status is COMPLETED
+                if (data.status === 'COMPLETED') {
+                  addEvent('Status COMPLETED received - auto-disconnecting', 'system')
+                  disconnect()
+                }
               } catch (e) {
                 addEvent(event.data, 'raw')
               }
