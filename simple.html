@@ -1,0 +1,18 @@
+<script type="text/javascript">
+  const eventSource = new EventSource('http://localhost:3000/demo/sse/client-manuals/2024/onboarding')
+  eventSource.onopen = () => {
+    console.log('open')
+  }
+  eventSource.onerror = () => {
+    console.log('error')
+  }
+  eventSource.onmessage = ({ data }) => {
+    const message = document.createElement('li')
+
+    try {
+      console.log('jsonData:', JSON.parse(data))
+    } catch (error) {
+      console.log('rawData:', data)
+    }
+  }
+</script>
