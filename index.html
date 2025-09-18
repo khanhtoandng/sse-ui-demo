@@ -170,6 +170,63 @@
         color: #721c24;
         border-left-color: #dc3545;
       }
+      .query-params-container {
+        margin: 10px 0;
+      }
+      .query-param-row {
+        display: flex;
+        gap: 10px;
+        margin: 5px 0;
+        align-items: center;
+      }
+      .query-param-input {
+        flex: 1;
+        padding: 6px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      .remove-param-btn {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .remove-param-btn:hover {
+        background: #c82333;
+      }
+      .add-param-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-top: 5px;
+      }
+      .add-param-btn:hover {
+        background: #218838;
+      }
+      .download-btn {
+        background: #17a2b8;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        margin: 5px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .download-btn:hover {
+        background: #138496;
+      }
+      .download-btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
     </style>
   </head>
 
@@ -180,14 +237,23 @@
       <div class="left-panel">
         <div class="connection-panel">
           <h3>Connection Settings</h3>
-          <label for="sse-url">SSE URL:</label>
+          <label for="sse-url">Base SSE URL:</label>
           <input
             type="text"
             id="sse-url"
             class="url-input"
-            value="http://localhost:3000/sse/client-manuals/2024/onboarding"
-            placeholder="Enter SSE endpoint URL"
+            value="http://localhost:3000/api/streams"
+            placeholder="Enter base SSE endpoint URL"
           />
+
+          <div class="query-params-container">
+            <label>Query Parameters:</label>
+            <div id="query-params-list">
+              <!-- Query parameter inputs will be added here -->
+            </div>
+            <button id="add-param-btn" class="add-param-btn">+ Add Parameter</button>
+          </div>
+
           <div>
             <button id="connect-btn" class="button">Connect</button>
             <button id="disconnect-btn" class="button disconnect" disabled>Disconnect</button>
@@ -216,7 +282,10 @@
 
       <div class="right-panel">
         <div id="events">
-          <h2>Events:</h2>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px">
+            <h2>Events:</h2>
+            <button id="download-json-btn" class="download-btn" disabled>Download All JSON</button>
+          </div>
           <ul id="event-list"></ul>
         </div>
       </div>
@@ -234,12 +303,79 @@
         const triggerPayloadInput = document.getElementById('trigger-payload')
         const triggerBtn = document.getElementById('trigger-btn')
         const triggerStatus = document.getElementById('trigger-status')
+        const queryParamsList = document.getElementById('query-params-list')
+        const addParamBtn = document.getElementById('add-param-btn')
+        const downloadJsonBtn = document.getElementById('download-json-btn')
 
         let eventSource = null
+        let jsonEvents = [] // Store all JSON events for download
 
         function updateStatus(state, message) {
           status.className = `status ${state}`
           status.textContent = message
+        }
+
+        function createQueryParamRow(key = '', value = '') {
+          const row = document.createElement('div')
+          row.className = 'query-param-row'
+
+          row.innerHTML = `
+            <input type="text" class="query-param-input" placeholder="Parameter name" value="${key}">
+            <input type="text" class="query-param-input" placeholder="Parameter value" value="${value}">
+            <button class="remove-param-btn" onclick="removeQueryParam(this)">×</button>
+          `
+
+          return row
+        }
+
+        function addQueryParam() {
+          queryParamsList.appendChild(createQueryParamRow())
+          updateDownloadButtonState()
+        }
+
+        function removeQueryParam(button) {
+          button.parentElement.remove()
+          updateDownloadButtonState()
+        }
+
+        function buildUrlWithParams() {
+          const baseUrl = urlInput.value.trim()
+          const params = new URLSearchParams()
+
+          const paramRows = queryParamsList.querySelectorAll('.query-param-row')
+          paramRows.forEach((row) => {
+            const inputs = row.querySelectorAll('.query-param-input')
+            const key = inputs[0].value.trim()
+            const value = inputs[1].value.trim()
+
+            if (key && value) {
+              params.append(key, value)
+            }
+          })
+
+          const paramString = params.toString()
+          return paramString ? `${baseUrl}?${paramString}` : baseUrl
+        }
+
+        function updateDownloadButtonState() {
+          downloadJsonBtn.disabled = jsonEvents.length === 0
+        }
+
+        function downloadJsonEvents() {
+          if (jsonEvents.length === 0) {
+            alert('No JSON events to download')
+            return
+          }
+
+          const dataStr = JSON.stringify(jsonEvents, null, 2)
+          const dataBlob = new Blob([dataStr], { type: 'application/json' })
+
+          const link = document.createElement('a')
+          link.href = URL.createObjectURL(dataBlob)
+          link.download = `sse-events-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
         }
 
         function syntaxHighlight(json) {
@@ -286,6 +422,14 @@
               const jsonData = typeof data === 'string' ? JSON.parse(data) : data
               formattedData = syntaxHighlight(jsonData)
               isJson = true
+
+              // Store JSON events for download
+              jsonEvents.push({
+                timestamp: new Date().toISOString(),
+                type: type,
+                data: jsonData,
+              })
+              updateDownloadButtonState()
             } catch (e) {
               // If not valid JSON, display as plain text
               formattedData = typeof data === 'string' ? data : JSON.stringify(data)
@@ -304,11 +448,13 @@
         }
 
         function connect() {
-          const url = urlInput.value.trim()
-          if (!url) {
+          const baseUrl = urlInput.value.trim()
+          if (!baseUrl) {
             alert('Please enter a valid URL')
             return
           }
+
+          const fullUrl = buildUrlWithParams()
 
           if (eventSource) {
             eventSource.close()
@@ -319,10 +465,10 @@
           disconnectBtn.disabled = false
 
           try {
-            eventSource = new EventSource(url)
+            eventSource = new EventSource(fullUrl)
 
             eventSource.onopen = function () {
-              updateStatus('connected', `Connected to: ${url}`)
+              updateStatus('connected', `Connected to: ${fullUrl}`)
               addEvent('Connection established', 'system')
             }
 
@@ -333,8 +479,7 @@
 
                 // Auto-disconnect when status is COMPLETED
                 if (data.status === 'COMPLETED') {
-                  addEvent('Status COMPLETED received - auto-disconnecting', 'system')
-                  disconnect()
+                  disconnect('Status COMPLETED received - auto-disconnecting')
                 }
               } catch (e) {
                 addEvent(event.data, 'raw')
@@ -360,7 +505,7 @@
           }
         }
 
-        function disconnect() {
+        function disconnect(message = 'Manually disconnected') {
           if (eventSource) {
             eventSource.close()
             eventSource = null
@@ -368,11 +513,13 @@
           updateStatus('disconnected', 'Disconnected')
           connectBtn.disabled = false
           disconnectBtn.disabled = true
-          addEvent('Manually disconnected', 'system')
+          addEvent(message, 'system')
         }
 
         function clearEvents() {
           eventList.innerHTML = ''
+          jsonEvents = []
+          updateDownloadButtonState()
         }
 
         function updateTriggerStatus(state, message) {
@@ -441,6 +588,14 @@
         disconnectBtn.addEventListener('click', disconnect)
         clearBtn.addEventListener('click', clearEvents)
         triggerBtn.addEventListener('click', triggerEvent)
+        addParamBtn.addEventListener('click', addQueryParam)
+        downloadJsonBtn.addEventListener('click', downloadJsonEvents)
+
+        // Make removeQueryParam globally accessible
+        window.removeQueryParam = removeQueryParam
+
+        // Initialize with one empty query parameter row
+        addQueryParam()
 
         // Allow Enter key to connect/trigger
         urlInput.addEventListener('keypress', (e) => {
